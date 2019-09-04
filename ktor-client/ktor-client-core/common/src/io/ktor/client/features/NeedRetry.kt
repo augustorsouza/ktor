@@ -12,48 +12,34 @@ import io.ktor.client.response.HttpReceivePipeline
 import io.ktor.client.response.HttpResponse
 import io.ktor.util.AttributeKey
 
-typealias NeedRetryHandler = suspend (response: HttpResponse) -> Boolean
+typealias RetryCondition = suspend (response: HttpResponse) -> Boolean
 
-class NeedRetry(
-    private val retryHandlers: List<NeedRetryHandler>
-) {
-    class Config {
-        internal val retryHandlers: MutableList<NeedRetryHandler> = mutableListOf()
+data class NeedRetryConfig(internal var condition: RetryCondition = { false }, internal var retry: Boolean = false)
 
-        fun needRetryHandler(block: NeedRetryHandler) {
-            retryHandlers += block
-        }
-    }
+class NeedRetry(private val retry: RetryCondition = { false }) : HttpClientFeature<NeedRetryConfig, NeedRetry> {
 
-    companion object : HttpClientFeature<Config, NeedRetry> {
-        override val key: AttributeKey<NeedRetry> = AttributeKey("NeedRetry")
+    override val key: AttributeKey<NeedRetry> = AttributeKey("NeedRetry")
 
-        override fun prepare(block: Config.() -> Unit): NeedRetry {
-            val config = Config().apply(block)
+    override fun prepare(block: NeedRetryConfig.() -> Unit): NeedRetry = NeedRetryConfig().apply(block).condition.let(::NeedRetry)
 
-            config.retryHandlers.reversed()
-
-            return NeedRetry(config.retryHandlers)
-        }
-
-        override fun install(feature: NeedRetry, scope: HttpClient) {
-            scope.receivePipeline.intercept(HttpReceivePipeline.After) {
-                try {
-                    val isRetryNeeded = feature.retryHandlers.map { it(context.response) }.contains(true)
-
-                    if (isRetryNeeded) {
-                        context.client.execute(HttpRequestBuilder().takeFrom(context.request))
-                    }
-
-                    proceedWith(it)
-                } catch (cause: Throwable) {
-                    throw cause
-                }
+    override fun install(feature: NeedRetry, scope: HttpClient) = scope.receivePipeline.intercept(HttpReceivePipeline.After) {
+        try {
+            feature.retry(context.response).let { retry ->
+                if (retry) context.client.execute(HttpRequestBuilder().takeFrom(context.request))
+                proceedWith(it)
             }
+        } catch (cause: Throwable) {
+            throw cause
         }
     }
 }
 
-fun HttpClientConfig<*>.NeedRetryHandler(block: NeedRetry.Config.() -> Unit) {
-    install(NeedRetry, block)
+private fun NeedRetryConfig.bind(block: RetryCondition) { condition = {
+    val cond = block(it)
+    retry || cond
+}}
+
+fun HttpClientConfig<*>.needRetry(retryCondition: RetryCondition) {
+    val retry: NeedRetryConfig.() -> Unit = { bind(retryCondition) }
+    install(NeedRetry(), retry)
 }

@@ -21,11 +21,9 @@ class NeedRetryTest {
         var needRetryHandlerCalled = false
 
         config {
-            NeedRetryHandler {
-                needRetryHandler {
-                    needRetryHandlerCalled = true
-                    false
-                }
+            needRetry {
+                needRetryHandlerCalled = true
+                false
             }
         }
 
