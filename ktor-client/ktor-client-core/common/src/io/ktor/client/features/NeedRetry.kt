@@ -14,7 +14,7 @@ import io.ktor.util.AttributeKey
 
 typealias RetryCondition = suspend (response: HttpResponse) -> Boolean
 
-data class NeedRetryConfig(internal var condition: RetryCondition = { false }, internal var retry: Boolean = false)
+data class NeedRetryConfig(internal var condition: RetryCondition = { false })
 
 class NeedRetry(private val retry: RetryCondition = { false }) : HttpClientFeature<NeedRetryConfig, NeedRetry> {
 
@@ -35,7 +35,7 @@ class NeedRetry(private val retry: RetryCondition = { false }) : HttpClientFeatu
 }
 
 private fun NeedRetryConfig.bind(block: RetryCondition) { condition = {
-    retry || block(it)
+    block(it)
 }}
 
 fun HttpClientConfig<*>.needRetry(retryCondition: RetryCondition) {

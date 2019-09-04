@@ -32,4 +32,23 @@ class NeedRetryTest {
             assertTrue(needRetryHandlerCalled, "Need retry handle never called")
         }
     }
+
+    @Test
+    fun testNeedRetryCalledUntilConditionIsTrue() = clientTest(MockEngine {
+        respondOk("Hello")
+    }) {
+        var attempts = 0
+
+        config {
+            needRetry {
+                attempts++
+                attempts <= 4
+            }
+        }
+
+        test { client ->
+            client.get<HttpResponse>()
+            assertTrue(attempts > 4, "Not retrying action")
+        }
+    }
 }
