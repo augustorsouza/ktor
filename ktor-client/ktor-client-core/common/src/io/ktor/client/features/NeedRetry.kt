@@ -35,8 +35,7 @@ class NeedRetry(private val retry: RetryCondition = { false }) : HttpClientFeatu
 }
 
 private fun NeedRetryConfig.bind(block: RetryCondition) { condition = {
-    val cond = block(it)
-    retry || cond
+    retry || block(it)
 }}
 
 fun HttpClientConfig<*>.needRetry(retryCondition: RetryCondition) {
